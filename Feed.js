@@ -26,12 +26,16 @@ import * as ScreenOrientation from 'expo-screen-orientation';
 import Toast from 'react-native-toast-message';
 import LikeButton from './LikeButton';
 import NotificationsScreen from './notifications';
+import MatchScreen from './match';
+import ProfileScreen from './profile';
+import MenuScreen from './menu';
 
 
 const BDU_RED = '#C8102E';
 const BDU_BG = '#F4F6F9';
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const currentUserId = auth.currentUser?.uid || 'guest';
+const DEFAULT_AVATAR = 'https://cdn.pixabay.com/photo/2015/10/05/22/37/blank-profile-picture-973460_960_720.png';
 
 
 const MOCK_POSTS = [];
@@ -57,7 +61,7 @@ const SystemNotice = () => {
       <Text style={styles.noticeContent}>{item.content}</Text>
     </View>
   );
-  */s
+  */
 };
 
 const getTimeAgo = (timestamp) => {
@@ -259,7 +263,7 @@ const PostItem = ({
               {item.author || 'Người dùng ẩn danh'}
             </Text>
             
-            {/* THÊM ĐIỀU KIỆN KẾT BẠN (GIỮ NGUYÊN LOGIC CỦA BÁC) */}
+            {/* NÚT KẾT BẠN TINH TẾ & HIỆN ĐẠI */}
             {!myFriends?.[item.userId] && item.userId && currentUser && item.userId !== currentUser.id && (
               <TouchableOpacity
                 style={[
@@ -270,9 +274,10 @@ const PostItem = ({
                 onPress={() => handleAddFriend(item)}
               >
                 <Ionicons
-                  name={isSent ? 'checkmark-circle' : 'person-add'}
-                  size={14}
-                  color={isSent ? "#34C759" : "#0084FF"} // Xanh lá nếu đã gửi, Xanh dương nếu chưa
+                  name={isSent ? 'checkmark' : 'person-add-outline'}
+                  size={13}
+                  color={isSent ? "#34C759" : BDU_RED}
+                  style={{ marginRight: 4 }}
                 />
                 <Text style={[styles.addFriendText, isSent && styles.addFriendTextSent]}>
                   {isSent ? 'Đã gửi' : 'Kết bạn'}
@@ -754,33 +759,30 @@ await addDoc(collection(db, "posts"), {
 };
 
 
-  // TÍNH NĂNG MỚI: Hàm xử lý nút Kết bạn
-  const handleAddFriend = async (targetUser) => {
+ const handleAddFriend = async (targetUser) => {
   try {
-    // Thêm dấu ?. ở đây để an toàn
-    const existingRequestId = sentRequests?.[targetUser.userId]; 
+    // Lấy ID chính xác của người nhận từ bài viết
+    const recipientId = targetUser.userId || targetUser.id;
+    const existingRequestId = sentRequests?.[recipientId]; 
+
     if (existingRequestId) {
-      // Hủy kết bạn
+      // Hủy / Thu hồi lời mời kết bạn
       await deleteDoc(doc(db, "friend_requests", existingRequestId));
 
-      // Hiện popup nhẹ thông báo Hủy thành công
       Toast.show({
         type: 'info',
         text1: 'Đã thu hồi lời mời kết bạn!',
         visibilityTime: 1500,
       });
     } else {
-      // Gửi kết bạn mới
-      await addDoc(collection(db,"friend_requests"),{
+      // Gửi lời mời kết bạn mới
+      await addDoc(collection(db, "friend_requests"), {
+        fromUserId: currentUser.id,
+        toUserId: recipientId,
+        status: "pending",
+        time: Timestamp.now()
+      });
 
-fromUserId:currentUser.id,
-toUserId:targetUser.userId,
-status:"pending",
-time:Timestamp.now()
-
-})
-
-      // Hiện popup nhẹ thông báo Gửi thành công
       Toast.show({
         type: 'success',
         text1: 'Đã gửi lời mời kết bạn!',
@@ -795,36 +797,8 @@ time:Timestamp.now()
     });
   }
 };
+
 // DÁN ĐOẠN NÀY DƯỚI HÀM handleAddFriend CỦA BẠN
-const handleLikePost = async (postId, likedByArray = []) => {
-  if (!currentUser?.id || currentUser.id === 'guest') {
-    Alert.alert("Thông báo", "Bạn cần đăng nhập để thực hiện tính năng này!");
-    return;
-  }
-
-  const postRef = doc(db, "posts", postId);
-  // Đảm bảo likedByArray luôn là một mảng hợp lệ
-  const safeLikedBy = Array.isArray(likedByArray) ? likedByArray : [];
-  const hasLiked = safeLikedBy.includes(currentUser.id);
-
-  try {
-    if (hasLiked) {
-      // Nếu đã thích trước đó -> Bấm lại nghĩa là BỎ THÍCH
-      await updateDoc(postRef, {
-        likedBy: arrayRemove(currentUser.id), // Xóa UID khỏi mảng danh sách thích
-        likes: increment(-1) // Giảm số lượng lượt thích đi 1
-      });
-    } else {
-      // Nếu chưa thích -> Bấm để THÍCH
-      await updateDoc(postRef, {
-        likedBy: arrayUnion(currentUser.id), // Thêm UID vào mảng danh sách thích
-        likes: increment(1) // Tăng số lượng lượt thích lên 1
-      });
-    }
-  } catch (error) {
-    console.error("Lỗi khi xử lý Like bài viết:", error);
-  }
-};
 
   useEffect(() => {
     if (!activePost?.id) {
@@ -992,10 +966,10 @@ const handleLikePost = async (postId, likedByArray = []) => {
 
  return (
     <>
-      <SafeAreaView edges={['top', 'left', 'right']} style={[styles.container, { backgroundColor: '#FFF', flex: 1 }]}>
+      <SafeAreaView style={[styles.container, { backgroundColor: '#FFF', flex: 1 }]}>
         <Tabs.Screen options={{ headerShown: false }} />
         {/* Tối ưu thanh Status Bar tone sáng để clean hơn */}
-        <StatusBar barStyle="dark-content" backgroundColor="#FFF" translucent={Platform.OS === 'android' ? false : true} />
+        <StatusBar barStyle="dark-content" backgroundColor="#FFF" translucent={false} />
         
         {/* Bọc toàn bộ nội dung trong View nền BDU_BG */}
         <View style={{ flex: 1, backgroundColor: BDU_BG }}>
@@ -1072,23 +1046,11 @@ const handleLikePost = async (postId, likedByArray = []) => {
           
         </View>
             
-            {/* Cụm nút Action bên phải */}
+           {/* Cụm nút Action bên phải */}
           <View style={{ position: 'absolute', right: 16, flexDirection: 'row', gap: 8 }}>
             
-          {/* 1. NÚT DANH SÁCH BẠN BÈ */}
-            <TouchableOpacity 
-              activeOpacity={0.7} 
-              onPress={() => router.push('/FriendsScreen')} 
-              style={styles.actionIconBtn}
-            >
-              <Ionicons 
-                name="people-circle-outline" // Tên chuẩn 100%
-                size={25} 
-                color="#fc0707" 
-              />
-            </TouchableOpacity>
 
-            {/* 2. NÚT TIN NHẮN (ĐOẠN BẠN MUỐN THÊM VÀO) */}
+            {/* 2. NÚT TIN NHẮN */}
             <TouchableOpacity 
               activeOpacity={0.7} 
               onPress={() => router.push('/messages')} 
@@ -1124,10 +1086,7 @@ const handleLikePost = async (postId, likedByArray = []) => {
     <TouchableOpacity 
       style={[styles.menuTabItem, activeTab === 'match' && styles.menuTabItemActive]} 
       activeOpacity={0.7}
-      onPress={() => {
-        setActiveTab('match');
-        router.replace('/match');
-      }}
+      onPress={() => setActiveTab('match')} // Chỉ gọi setActiveTab tại chỗ
     >
       <Ionicons name="people-outline" size={20} color={activeTab === 'match' ? BDU_RED : "#65676B"} />
       <Text style={[styles.menuTabText, activeTab === 'match' && styles.menuTabTextActive]}>Match</Text>
@@ -1153,27 +1112,11 @@ const handleLikePost = async (postId, likedByArray = []) => {
           <Text style={[styles.menuTabText, activeTab === 'notification' && styles.menuTabTextActive]}>Thông báo</Text>
         </TouchableOpacity>
 
-    {/* Tab 4: Cá nhân */}
-    <TouchableOpacity 
-      style={[styles.menuTabItem, activeTab === 'profile' && styles.menuTabItemActive]} 
-      activeOpacity={0.7}
-      onPress={() => {
-        setActiveTab('profile');
-        router.push('/profile');
-      }}
-    >
-      <Ionicons name="person-outline" size={20} color={activeTab === 'profile' ? BDU_RED : "#65676B"} />
-      <Text style={[styles.menuTabText, activeTab === 'profile' && styles.menuTabTextActive]}>Cá nhân</Text>
-    </TouchableOpacity>
-
     {/* Tab 5: Menu */}
     <TouchableOpacity 
       style={[styles.menuTabItem, activeTab === 'menu' && styles.menuTabItemActive]} 
       activeOpacity={0.7}
-      onPress={() => {
-        setActiveTab('menu');
-        setMenuVisible(true);
-      }}
+      onPress={() => setActiveTab('menu')} // CHỈ CẦN DÒNG NÀY THÔI
     >
       <Ionicons name="menu-outline" size={20} color={activeTab === 'menu' ? BDU_RED : "#65676B"} />
       <Text style={[styles.menuTabText, activeTab === 'menu' && styles.menuTabTextActive]}>Menu</Text>
@@ -1223,10 +1166,11 @@ const handleLikePost = async (postId, likedByArray = []) => {
           )
         )}
 
-        {/* TRƯỜNG HỢP 2: Tab Thông báo */}
-        {activeTab === 'notification' && (
-          <NotificationsScreen />
-        )}
+{activeTab === 'match' && <MatchScreen />}
+{activeTab === 'notification' && <NotificationsScreen />}
+{activeTab === 'menu' && (
+        <MenuScreen currentUser={currentUser} setActiveTab={setActiveTab} />
+      )}
 
       </View>
 
@@ -1381,45 +1325,6 @@ const handleLikePost = async (postId, likedByArray = []) => {
                   ListEmptyComponent={<Text style={{ textAlign: 'center', marginTop: 40, color: '#8A8D91', fontSize: 15 }}>Hiện chưa có thông báo mới nào.</Text>}
                 />
               </View>
-            </View>
-          </Modal>
-
-          {/* 4. MODAL MENU XỔ LÊN */}
-          <Modal animationType="slide" transparent={true} visible={menuVisible} onRequestClose={() => setMenuVisible(false)}>
-            {/* Đã gỡ bỏ lớp nền đen mờ ở đây */}
-            <TouchableOpacity style={[styles.modalOverlay, { backgroundColor: 'transparent' }]} activeOpacity={1} onPress={() => setMenuVisible(false)} />
-            
-            <View style={styles.menuContainer}>
-              <View style={styles.dragIndicator} /> 
-              <Text style={styles.menuHeaderTitle}>Menu</Text>
-
-              <TouchableOpacity 
-                style={styles.menuItem} 
-                activeOpacity={0.7}
-                onPress={() => {
-                  setMenuVisible(false);
-                  router.push('/FriendListScreen');
-                }}
-              >
-                <View style={[styles.iconBox, { backgroundColor: '#E7F3FF' }]}>
-                  <Ionicons name="people" size={24} color="#0866FF" />
-                </View>
-                <Text style={styles.menuItemText}>Danh sách bạn bè</Text>
-                <Ionicons name="chevron-forward" size={20} color="#65676B" style={styles.arrowIcon} />
-              </TouchableOpacity>
-
-              <TouchableOpacity style={styles.menuItem} activeOpacity={0.7} onPress={() => {
-                Alert.alert("Đăng xuất", "Bạn có muốn thoát tài khoản không?", [
-                    { text: "Hủy", style: "cancel" },
-                    { text: "Đăng xuất", style: "destructive", onPress: () => router.replace('/') }
-                ]);
-              }}>
-                <View style={[styles.iconBox, { backgroundColor: '#FEE2E2' }]}>
-                  <Ionicons name="log-out-outline" size={24} color={BDU_RED} />
-                </View>
-                <Text style={styles.menuItemText}>Đăng xuất</Text>
-                <Ionicons name="chevron-forward" size={20} color="#65676B" style={styles.arrowIcon} />
-              </TouchableOpacity>
             </View>
           </Modal>
         </View>
@@ -1613,27 +1518,29 @@ const styles = StyleSheet.create({
     borderColor: '#FFF',
   },
 
-  // -- Nút kết bạn --
+  // -- Nút kết bạn (Thiết kế mới tinh tế, dạng pill viền mỏng) --
   addFriendBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: BDU_RED, 
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 14,
+    backgroundColor: '#FFF0F2', // Nền đỏ hồng cực nhạt, tone sur tone với BDU_RED
+    borderWidth: 1,
+    borderColor: '#FCD4D4',     // Viền mỏng nhẹ nhàng
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
     marginLeft: 8,
   },
   addFriendBtnSent: {
-    backgroundColor: 'rgba(52, 199, 89, 0.1)',
+    backgroundColor: '#F0F2F5', // Nền xám nhạt khi đã gửi
+    borderColor: '#E4E6EB',
   },
   addFriendText: {
-    color: '#FFF',
+    color: BDU_RED,
     fontSize: 12,
     fontWeight: '700',
-    marginLeft: 5,
   },
   addFriendTextSent: {
-    color: '#34C759',
+    color: '#65676B', // Chữ xám trung tính khi đã gửi
   },
 
   // ==========================================
