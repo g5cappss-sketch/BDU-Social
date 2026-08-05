@@ -29,7 +29,8 @@ import NotificationsScreen from './notifications';
 import MatchScreen from './match';
 import ProfileScreen from './profile';
 import MenuScreen from './menu';
-
+import MessagesScreen from './messages';
+import CampusRadarScreen from './CampusRadarScreen';
 
 const BDU_RED = '#C8102E';
 const BDU_BG = '#F4F6F9';
@@ -255,15 +256,50 @@ const PostItem = ({
     <View style={styles.postCard}>
      {/* --- 1. HEADER BÀI VIẾT --- */}
       <View style={styles.postHeader}>
-        <Image source={{ uri: item.avatar || 'https://i.pravatar.cc/100?img=1' }} style={styles.postAvatar} />
+        
+        {/* BẤM AVATAR: KIỂM TRA NẾU LÀ MÌNH THÌ VỀ TAB PROFILE, CÒN KHÔNG THÌ MỞ USERPROFILE */}
+        {/* BẤM AVATAR */}
+        <TouchableOpacity 
+          activeOpacity={0.8}
+          onPress={() => {
+            if (item.userId === currentUser?.id) {
+              // Nếu là chính mình, đẩy về trang profile cá nhân của app
+              router.push('/profile'); // Hoặc đường dẫn tab profile của bạn
+            } else {
+              router.push({
+                pathname: '/UserProfileScreen', 
+                params: { userId: item.userId } 
+              });
+            }
+          }}
+        >
+          <Image source={{ uri: item.avatar || 'https://i.pravatar.cc/100?img=1' }} style={styles.postAvatar} />
+        </TouchableOpacity>
         
         <View style={styles.postInfo}>
           <View style={styles.authorRow}>
-            <Text style={styles.postAuthor} numberOfLines={1}>
-              {item.author || 'Người dùng ẩn danh'}
-            </Text>
             
-            {/* NÚT KẾT BẠN TINH TẾ & HIỆN ĐẠI */}
+            {/* BẤM TÊN */}
+            <TouchableOpacity 
+              activeOpacity={0.8}
+              onPress={() => {
+                if (item.userId === currentUser?.id) {
+                  // Nếu là chính mình, đẩy về trang profile cá nhân của app
+                  router.push('/profile'); // Hoặc đường dẫn tab profile của bạn
+                } else {
+                  router.push({
+                    pathname: '/UserProfileScreen', 
+                    params: { userId: item.userId } 
+                  });
+                }
+              }}
+            >
+              <Text style={styles.postAuthor} numberOfLines={1}>
+                {item.author || 'Người dùng ẩn danh'}
+              </Text>
+            </TouchableOpacity>
+            
+            {/* NÚT KẾT BẠN TINH TẾ & HIỆN ĐẠI (GIỮ NGUYÊN 100%) */}
             {!myFriends?.[item.userId] && item.userId && currentUser && item.userId !== currentUser.id && (
               <TouchableOpacity
                 style={[
@@ -286,7 +322,7 @@ const PostItem = ({
             )}
           </View>
           
-          {/* Fix lỗi Firebase Time nếu có, hoặc in ra item.time bình thường */}
+          {/* Fix lỗi Firebase Time nếu có, hoặc in ra item.time bình thường (GIỮ NGUYÊN 100%) */}
           <Text style={styles.postTime}>
             {typeof item.time === 'object' && item.time?.toDate 
               ? item.time.toDate().toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' }) 
@@ -294,7 +330,7 @@ const PostItem = ({
           </Text>
         </View>
 
-        {/* Nút Ba chấm (Giữ nguyên logic) */}
+        {/* Nút Ba chấm (Giữ nguyên logic 100%) */}
         {(currentUser?.id === item.userId || currentUser?.role === 'admin') && (
           <TouchableOpacity onPress={() => handlePostOptions(item)} style={styles.moreBtn} activeOpacity={0.5}>
             <Ionicons name="ellipsis-horizontal" size={20} color="#65676B" />
@@ -383,6 +419,7 @@ const PostItem = ({
         </TouchableOpacity>
 
       </View>
+
     </View>
   );
 };
@@ -431,7 +468,8 @@ export default function FeedScreen() {
   const [myFriends, setMyFriends] = useState({});
   const [menuVisible, setMenuVisible] = useState(false);
   const [isAnonymous, setIsAnonymous] = useState(false);
-  const [activeTab, setActiveTab] = useState('feed'); // Lưu tab đang chọn (mặc định là 'feed')
+  const [activeTab, setActiveTab] = useState('feed');
+  const [radarVisible, setRadarVisible] = useState(false);
   
   // CẬP NHẬT 3: Lắng nghe Auth và Fetch User Firestore
   useEffect(() => {
@@ -1040,26 +1078,20 @@ await addDoc(collection(db, "posts"), {
       </View>
     </View>
 
-          {/* Tôi đã tạm ẩn dòng chữ phụ đi vì logo của bác đã có chữ rồi. 
-              Nếu bác vẫn muốn giữ, hãy bỏ dấu comment (//) ở dưới nhé */}
-          {/* <Text style={styles.headerSubFlat}>Kết nối đam mê</Text> */}
-          
-        </View>
-            
-           {/* Cụm nút Action bên phải */}
+         {/* Cụm nút Action bên phải */}
           <View style={{ position: 'absolute', right: 16, flexDirection: 'row', gap: 8 }}>
             
-
-            {/* 2. NÚT TIN NHẮN */}
+            {/* NÚT MỞ RADAR KẾT NỐI */}
             <TouchableOpacity 
               activeOpacity={0.7} 
-              onPress={() => router.push('/messages')} 
-              style={styles.actionIconBtn}
+              onPress={() => setRadarVisible(true)} 
+              style={[styles.actionIconBtn, { backgroundColor: 'rgba(200, 16, 46, 0.1)' }]}
             >
-              <Ionicons name="chatbubble-ellipses-outline" size={23} color="#1A1A1A" />
+              <MaterialCommunityIcons name="radar" size={24} color={BDU_RED} />
             </TouchableOpacity>
 
           </View>
+        </View>
         </View>
 
         {/* =======================================================
@@ -1111,6 +1143,16 @@ await addDoc(collection(db, "posts"), {
           </View>
           <Text style={[styles.menuTabText, activeTab === 'notification' && styles.menuTabTextActive]}>Thông báo</Text>
         </TouchableOpacity>
+
+        {/* Tab Tin nhắn (MỚI THÊM) */}
+    <TouchableOpacity 
+      style={[styles.menuTabItem, activeTab === 'messages' && styles.menuTabItemActive]} 
+      activeOpacity={0.7}
+      onPress={() => setActiveTab('messages')}
+    >
+      <Ionicons name="chatbubbles-outline" size={20} color={activeTab === 'messages' ? BDU_RED : "#65676B"} />
+      <Text style={[styles.menuTabText, activeTab === 'messages' && styles.menuTabTextActive]}>Tin nhắn</Text>
+    </TouchableOpacity>
 
     {/* Tab 5: Menu */}
     <TouchableOpacity 
@@ -1168,9 +1210,8 @@ await addDoc(collection(db, "posts"), {
 
 {activeTab === 'match' && <MatchScreen />}
 {activeTab === 'notification' && <NotificationsScreen />}
-{activeTab === 'menu' && (
-        <MenuScreen currentUser={currentUser} setActiveTab={setActiveTab} />
-      )}
+{activeTab === 'menu' && (<MenuScreen currentUser={currentUser} setActiveTab={setActiveTab} />)}
+{activeTab === 'messages' && <MessagesScreen />}
 
       </View>
 
@@ -1328,6 +1369,12 @@ await addDoc(collection(db, "posts"), {
             </View>
           </Modal>
         </View>
+        {/* ======================================================= */}
+          {/* 4. MÀN HÌNH CAMPUS RADAR (XỊN XÒ) */}
+          {/* ======================================================= */}
+          <Modal visible={radarVisible} animationType="slide" transparent={false}>
+            <CampusRadarScreen onClose={() => setRadarVisible(false)} />
+          </Modal>
       </SafeAreaView>
       <Toast />
     </>
