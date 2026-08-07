@@ -32,6 +32,22 @@ import MenuScreen from './menu';
 import MessagesScreen from './messages';
 import CampusRadarScreen from './CampusRadarScreen';
 
+
+// Hàm chống bấm dồn dập
+function useDebounceClick(callback, delay = 300) {
+  const isReady = useRef(true);
+
+  return (...args) => {
+    if (!isReady.current) return;
+    isReady.current = false;
+    callback(...args);
+    setTimeout(() => {
+      isReady.current = true;
+    }, delay);
+  };
+}
+
+
 const BDU_RED = '#C8102E';
 const BDU_BG = '#F4F6F9';
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -191,7 +207,6 @@ const CommentItem = ({ cmt, isReply, handleCommentOptions, handleReply, currentU
 // =====================================================================
 // COMPONENT CON: BÀI VIẾT 
 // =====================================================================
-// TÍNH NĂNG MỚI: Thêm prop currentUser và handleAddFriend
 const PostItem = ({ 
   item, 
   handlePostOptions, 
@@ -201,9 +216,8 @@ const PostItem = ({
   currentUser, 
   handleAddFriend,
   sentRequests,
-  myFriends // <-- BẮT BUỘC phải có dòng này ở đây
+  myFriends 
 }) => {
-  const scaleAnim = useRef(new Animated.Value(1)).current; 
   const isSent = sentRequests && sentRequests[item.userId];
   const videoRef = useRef(null); 
   const [isMuted, setIsMuted] = useState(true);
@@ -211,8 +225,6 @@ const PostItem = ({
   const [isFullscreen, setIsFullscreen] = useState(false);
   const isVisible = visibleItemIds.includes(item.id);
   const lastTap = useRef(null);
-  
-  
 
   useEffect(() => {
     if (videoRef.current && !isFullscreen) { 
@@ -223,8 +235,7 @@ const PostItem = ({
 
   const handleVideoPress = () => {
     const now = Date.now();
-    const DOUBLE_PRESS_DELAY = 300;
-    if (lastTap.current && (now - lastTap.current) < DOUBLE_PRESS_DELAY) {
+    if (lastTap.current && (now - lastTap.current) < 300) {
       toggleFullscreen();
     } else {
       lastTap.current = now;
@@ -254,43 +265,30 @@ const PostItem = ({
 
   return (
     <View style={styles.postCard}>
-     {/* --- 1. HEADER BÀI VIẾT --- */}
+      {/* --- 1. HEADER BÀI VIẾT --- */}
       <View style={styles.postHeader}>
-        
-        {/* BẤM AVATAR: KIỂM TRA NẾU LÀ MÌNH THÌ VỀ TAB PROFILE, CÒN KHÔNG THÌ MỞ USERPROFILE */}
-        {/* BẤM AVATAR */}
         <TouchableOpacity 
           activeOpacity={0.8}
           onPress={() => {
             if (item.userId === currentUser?.id) {
-              // Nếu là chính mình, đẩy về trang profile cá nhân của app
-              router.push('/profile'); // Hoặc đường dẫn tab profile của bạn
+              router.push('/profile');
             } else {
-              router.push({
-                pathname: '/UserProfileScreen', 
-                params: { userId: item.userId } 
-              });
+              router.push({ pathname: '/UserProfileScreen', params: { userId: item.userId } });
             }
           }}
         >
-          <Image source={{ uri: item.avatar || 'https://i.pravatar.cc/100?img=1' }} style={styles.postAvatar} />
+          <Image source={{ uri: item.avatar || DEFAULT_AVATAR }} style={styles.postAvatar} />
         </TouchableOpacity>
         
         <View style={styles.postInfo}>
           <View style={styles.authorRow}>
-            
-            {/* BẤM TÊN */}
             <TouchableOpacity 
               activeOpacity={0.8}
               onPress={() => {
                 if (item.userId === currentUser?.id) {
-                  // Nếu là chính mình, đẩy về trang profile cá nhân của app
-                  router.push('/profile'); // Hoặc đường dẫn tab profile của bạn
+                  router.push('/profile');
                 } else {
-                  router.push({
-                    pathname: '/UserProfileScreen', 
-                    params: { userId: item.userId } 
-                  });
+                  router.push({ pathname: '/UserProfileScreen', params: { userId: item.userId } });
                 }
               }}
             >
@@ -299,21 +297,18 @@ const PostItem = ({
               </Text>
             </TouchableOpacity>
             
-            {/* NÚT KẾT BẠN TINH TẾ & HIỆN ĐẠI (GIỮ NGUYÊN 100%) */}
+            {/* Nút Kết bạn nhỏ gọn tinh tế */}
             {!myFriends?.[item.userId] && item.userId && currentUser && item.userId !== currentUser.id && (
               <TouchableOpacity
-                style={[
-                  styles.addFriendBtn,
-                  isSent && styles.addFriendBtnSent
-                ]}
+                style={[styles.addFriendBtn, isSent && styles.addFriendBtnSent]}
                 activeOpacity={0.7}
                 onPress={() => handleAddFriend(item)}
               >
                 <Ionicons
                   name={isSent ? 'checkmark' : 'person-add-outline'}
-                  size={13}
+                  size={12}
                   color={isSent ? "#34C759" : BDU_RED}
-                  style={{ marginRight: 4 }}
+                  style={{ marginRight: 3 }}
                 />
                 <Text style={[styles.addFriendText, isSent && styles.addFriendTextSent]}>
                   {isSent ? 'Đã gửi' : 'Kết bạn'}
@@ -322,29 +317,31 @@ const PostItem = ({
             )}
           </View>
           
-          {/* Fix lỗi Firebase Time nếu có, hoặc in ra item.time bình thường (GIỮ NGUYÊN 100%) */}
           <Text style={styles.postTime}>
             {typeof item.time === 'object' && item.time?.toDate 
-              ? item.time.toDate().toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' }) 
+              ? item.time.toDate().toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' }) 
               : (item.time || 'Vừa xong')}
           </Text>
         </View>
 
-        {/* Nút Ba chấm (Giữ nguyên logic 100%) */}
         {(currentUser?.id === item.userId || currentUser?.role === 'admin') && (
           <TouchableOpacity onPress={() => handlePostOptions(item)} style={styles.moreBtn} activeOpacity={0.5}>
-            <Ionicons name="ellipsis-horizontal" size={20} color="#65676B" />
+            <Ionicons name="ellipsis-horizontal" size={18} color="#8A8D91" />
           </TouchableOpacity>
         )}
       </View>
       
       {/* --- 2. NỘI DUNG CHỮ --- */}
-      <Text style={styles.postContent}>{item.content}</Text>
+      {item.content ? <Text style={styles.postContent}>{item.content}</Text> : null}
       
       {/* --- 3. NỘI DUNG ẢNH --- */}
-      {item.image && <Image source={{ uri: item.image }} style={styles.postImage} resizeMode="cover" />}
+      {item.image && (
+        <View style={styles.mediaWrapper}>
+          <Image source={{ uri: item.image }} style={styles.postImage} resizeMode="cover" />
+        </View>
+      )}
       
-      {/* --- 4. NỘI DUNG VIDEO (GIỮ NGUYÊN HOÀN TOÀN LOGIC CỦA BÁC) --- */}
+      {/* --- 4. NỘI DUNG VIDEO --- */}
       {item.video && (
         <View style={styles.videoContainer}>
           <TouchableWithoutFeedback onPress={handleVideoPress}>
@@ -360,25 +357,19 @@ const PostItem = ({
                 onPlaybackStatusUpdate={status => setVideoStatus(() => status)}
                 onFullscreenUpdate={handleFullscreenUpdate}
               />
-              
               {!isFullscreen && (
                 <>
                   <TouchableOpacity style={styles.muteBtn} onPress={() => setIsMuted(!isMuted)}>
-                    <Ionicons name={isMuted ? "volume-mute" : "volume-high"} size={16} color="#FFF" />
+                    <Ionicons name={isMuted ? "volume-mute" : "volume-high"} size={14} color="#FFF" />
                   </TouchableOpacity>
                   <TouchableOpacity style={styles.fullscreenBtn} onPress={toggleFullscreen}>
-                    <Ionicons name="expand" size={16} color="#FFF" />
+                    <Ionicons name="expand" size={14} color="#FFF" />
                   </TouchableOpacity>
-                  
                   {!videoStatus?.isPlaying && (
                     <View style={styles.playIconOverlay}>
-                      <Ionicons name="play" size={40} color="rgba(255,255,255,0.8)" />
+                      <Ionicons name="play" size={32} color="rgba(255,255,255,0.9)" />
                     </View>
                   )}
-
-                  <View style={styles.progressBarBg}>
-                    <View style={[styles.progressBarFill, { width: `${(videoStatus?.positionMillis / (videoStatus?.durationMillis || 1)) * 100}%` }]} />
-                  </View>
                 </>
               )}
             </View>
@@ -386,25 +377,22 @@ const PostItem = ({
         </View>
       )}
       
-      {/* --- 5. THỐNG KÊ (LIKE / COMMENT) --- */}
+      {/* --- 5. THỐNG KÊ --- */}
       <View style={styles.postStats}>
         <View style={styles.statsLeft}>
           <View style={styles.likeIconBg}>
-            <Ionicons name="heart" size={12} color="#FFF" />
+            <Ionicons name="heart" size={10} color="#FFF" />
           </View>
           <Text style={styles.statsText}>{item.likedBy?.length || item.likes || 0}</Text>
         </View>
-        <Text style={styles.statsText}>{item.comments} bình luận</Text>
+        <Text style={styles.statsText}>{item.comments || 0} bình luận</Text>
       </View>
-      
-      {/* ĐƯỜNG KẺ MỜ (Điểm nhấn Premium) */}
+
       <View style={styles.postDivider} />
 
-      {/* --- 6. NÚT TƯƠNG TÁC --- */}
+      {/* --- 6. NÚT TƯƠNG TÁC CAO CẤP --- */}
       <View style={styles.postActions}>
-        
-        {/* COMPONENT LIKE (Giữ nguyên) */}
-        <View style={{ flex: 1, marginRight: 8 }}>
+        <View style={{ flex: 1, marginRight: 6 }}>
           <LikeButton 
             postId={item.id}
             likedBy={item.likedBy}
@@ -412,18 +400,61 @@ const PostItem = ({
           />
         </View>
 
-        {/* NÚT BÌNH LUẬN (Giao diện thẻ Chip) */}
         <TouchableOpacity style={styles.pillBtn} activeOpacity={0.7} onPress={() => openCommentModal(item)}>
-          <Ionicons name="chatbubble-outline" size={20} color="#4B4C4F" />
+          <Ionicons name="chatbubble-outline" size={18} color="#65676B" />
           <Text style={styles.actionText}>Bình luận</Text>
         </TouchableOpacity>
-
       </View>
-
     </View>
   );
 };
 
+const renderListHeader = () => (
+  <View style={styles.headerWrapper}>
+    {/* KHU VỰC Ô ĐĂNG BÀI CAO CẤP */}
+    <View style={styles.createPostCard}>
+      <View style={styles.inputSection}>
+        <Image 
+          source={{ uri: currentUser?.avatar?.trim() ? currentUser.avatar : DEFAULT_AVATAR }} 
+          style={styles.userAvatar} 
+        />
+        <TouchableOpacity 
+          style={styles.inputButton} 
+          activeOpacity={0.7}
+          onPress={() => {
+            setNewPostText(""); 
+            setSelectedImage(null); 
+            setSelectedVideo(null); 
+            setEditingPostId(null); 
+            setModalVisible(true);
+          }}
+        >
+          <Text style={styles.inputText}>
+            {`Bạn đang nghĩ gì, ${currentUser?.name ? currentUser.name.split(' ').pop() : ''}?`}
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.createActions}>
+        <TouchableOpacity style={styles.createActionBtn} activeOpacity={0.6} onPress={pickImage}>
+          <Ionicons name="image-outline" size={20} color="#34C759" />
+          <Text style={styles.createActionText}>Ảnh / Video</Text>
+        </TouchableOpacity>
+        
+        <View style={styles.verticalDivider} />
+
+        <TouchableOpacity style={styles.createActionBtn} activeOpacity={0.6} onPress={takePhoto}>
+          <Ionicons name="camera-outline" size={20} color="#0084FF" />
+          <Text style={styles.createActionText}>Chụp ảnh</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+    <View style={styles.thickDivider} />
+    <SystemNotice />
+  </View>
+
+  
+);
 // =====================================================================
 // MÀN HÌNH CHÍNH
 // =====================================================================
@@ -470,6 +501,10 @@ export default function FeedScreen() {
   const [isAnonymous, setIsAnonymous] = useState(false);
   const [activeTab, setActiveTab] = useState('feed');
   const [radarVisible, setRadarVisible] = useState(false);
+  const flatListRef = useRef(null);
+  const [showScrollTopBtn, setShowScrollTopBtn] = useState(false);
+  const lastScrollY = useRef(0);
+  const [isRefreshingTop, setIsRefreshingTop] = useState(false);
   
   // CẬP NHẬT 3: Lắng nghe Auth và Fetch User Firestore
   useEffect(() => {
@@ -1165,55 +1200,87 @@ await addDoc(collection(db, "posts"), {
     </TouchableOpacity>
   </ScrollView>
 </View> 
-          {/* =======================================================
-              NỀN BẢNG TIN (Khu vực cuộn FlatList)
+         {/* =======================================================
+              NỀN BẢNG TIN & CÁC TAB KHÁC (TỐI ƯU HÓA DISPLAY NONE/FLEX)
               ======================================================= */}
           <View style={{ flex: 1, backgroundColor: BDU_BG }}>
-        
-        {/* TRƯỜNG HỢP 1: Tab Bảng tin */}
-        {activeTab === 'feed' && (
-          loading ? (
-            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', minHeight: 300 }}>
-              <ActivityIndicator size="large" color={BDU_RED} />
-              <Text style={{ marginTop: 16, color: '#65676B', fontSize: 15, fontWeight: '500' }}>Đang tải bảng tin...</Text>
-            </View>
-          ) : (
-            <FlatList
-              data={(posts && posts.length > 0) ? posts : MOCK_POSTS} 
-              onViewableItemsChanged={onViewableItemsChanged}
-              viewabilityConfig={viewabilityConfig}
-              renderItem={({ item }) => (
-                <PostItem 
-                  item={item} 
-                  handlePostOptions={handlePostOptions} 
-                  handleShare={handleShare} 
-                  openCommentModal={openCommentModal} 
-                  visibleItemIds={visibleItemIds}
-                  currentUser={currentUser}
-                  handleAddFriend={handleAddFriend}
-                  sentRequests={sentRequests} 
-                  myFriends={myFriends}
+            
+            {/* 1. Tab Bảng tin */}
+            <View style={{ flex: 1, display: activeTab === 'feed' ? 'flex' : 'none' }}>
+              {loading ? (
+                <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', minHeight: 300 }}>
+                  <ActivityIndicator size="large" color={BDU_RED} />
+                  <Text style={{ marginTop: 16, color: '#65676B', fontSize: 15, fontWeight: '500' }}>Đang tải bảng tin...</Text>
+                </View>
+              ) : (
+                <FlatList
+                  ref={flatListRef}
+                  data={(posts && posts.length > 0) ? posts : MOCK_POSTS} 
+                  onViewableItemsChanged={onViewableItemsChanged}
+                  viewabilityConfig={viewabilityConfig}
+                  renderItem={({ item }) => (
+                    <PostItem 
+                      item={item} 
+                      handlePostOptions={handlePostOptions} 
+                      handleShare={handleShare} 
+                      openCommentModal={openCommentModal} 
+                      visibleItemIds={visibleItemIds}
+                      currentUser={currentUser}
+                      handleAddFriend={handleAddFriend}
+                      sentRequests={sentRequests} 
+                      myFriends={myFriends}
+                    />
+                  )}
+                  keyExtractor={item => item.id}
+                  ListHeaderComponent={renderListHeader}
+                  showsVerticalScrollIndicator={false}
+                  contentContainerStyle={{ paddingBottom: 30 }}
+                  removeClippedSubviews={true}
+                  initialNumToRender={5}
+                  maxToRenderPerBatch={5}
+                  windowSize={10}
+                  refreshControl={ <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={BDU_RED} colors={[BDU_RED]} /> }
+                  onScroll={(event) => {
+                    const currentOffsetY = event.nativeEvent.contentOffset.y;
+                    const diff = currentOffsetY - lastScrollY.current;
+
+                    if (currentOffsetY < 700) {
+                      if (showScrollTopBtn) setShowScrollTopBtn(false);
+                    } else {
+                      if (diff > 10 && !showScrollTopBtn) {
+                        setShowScrollTopBtn(true);
+                      } else if (diff < -10 && showScrollTopBtn) {
+                        setShowScrollTopBtn(false);
+                      }
+                    }
+                    lastScrollY.current = currentOffsetY;
+                  }}
+                  scrollEventThrottle={150}
                 />
               )}
-              keyExtractor={item => item.id}
-              ListHeaderComponent={renderListHeader}
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={{ paddingBottom: 30 }}
-              removeClippedSubviews={true}
-              initialNumToRender={5}
-              maxToRenderPerBatch={5}
-              windowSize={10}
-              refreshControl={ <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={BDU_RED} colors={[BDU_RED]} /> }
-            />
-          )
-        )}
+            </View>
 
-{activeTab === 'match' && <MatchScreen />}
-{activeTab === 'notification' && <NotificationsScreen />}
-{activeTab === 'menu' && (<MenuScreen currentUser={currentUser} setActiveTab={setActiveTab} />)}
-{activeTab === 'messages' && <MessagesScreen />}
+            {/* 2. Tab Match */}
+            <View style={{ flex: 1, display: activeTab === 'match' ? 'flex' : 'none' }}>
+              <MatchScreen />
+            </View>
 
-      </View>
+            {/* 3. Tab Thông báo */}
+            <View style={{ flex: 1, display: activeTab === 'notification' ? 'flex' : 'none' }}>
+              <NotificationsScreen />
+            </View>
+
+            {/* 4. Tab Menu */}
+            <View style={{ flex: 1, display: activeTab === 'menu' ? 'flex' : 'none' }}>
+              <MenuScreen currentUser={currentUser} setActiveTab={setActiveTab} />
+            </View>
+
+            {/* 5. Tab Tin nhắn */}
+            <View style={{ flex: 1, display: activeTab === 'messages' ? 'flex' : 'none' }}>
+              <MessagesScreen />
+            </View>
+
+          </View>
 
           {/* =======================================================
           {/* =======================================================
@@ -1381,39 +1448,36 @@ await addDoc(collection(db, "posts"), {
   );
 };
 const styles = StyleSheet.create({
-
-  // ==========================================
-  // TOP NAVIGATION NGANG
-  // ==========================================
-  // ==========================================
-  // NAVIGATION TRƯỢT NGANG (TOP MENU BAR)
-  // ==========================================
+  container: { flex: 1, backgroundColor: '#F0F2F5' },
+  
+  // --- TOP MENU BAR NỔI BẬT ---
   topMenuBar: {
     backgroundColor: '#FFF',
     paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#E4E6EB',
+    borderBottomColor: '#F0F2F5',
   },
   menuTabItem: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 8,
     paddingHorizontal: 16,
-    marginRight: 8, // Khoảng cách giữa các nút
-    backgroundColor: '#F0F2F5', // Nền xám nhạt cho tab chưa chọn
-    borderRadius: 20, // Bo tròn dạng viên thuốc
+    marginRight: 8,
+    backgroundColor: '#F4F6F8',
+    borderRadius: 22,
   },
   menuTabItemActive: {
-    backgroundColor: 'rgba(228, 30, 38, 0.1)', // Nền đỏ mờ (BDU_RED) cho tab đang chọn
+    backgroundColor: 'rgba(200, 16, 46, 0.12)',
   },
   menuTabText: {
     marginLeft: 6,
-    fontSize: 14,
+    fontSize: 13.5,
     fontWeight: '600',
     color: '#65676B',
   },
   menuTabTextActive: {
-    color: BDU_RED, // Chữ đỏ cho tab đang chọn
+    color: BDU_RED,
+    fontWeight: '700',
   },
   smallBadgeDot: {
     position: 'absolute',
@@ -1426,280 +1490,66 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: '#FFF',
   },
-  // ==========================================
-  // CÁC STYLE BỔ SUNG CHO TÍNH NĂNG MỚI (NOTICE)
-  // ==========================================
-  noticeCard: {
-    backgroundColor: '#FFF',
-    borderLeftWidth: 5,
-    borderLeftColor: '#C8102E', // Màu đỏ BDU làm điểm nhấn
-    padding: 16,
-    marginHorizontal: 16,
-    marginTop: 12,
-    marginBottom: 4,
-    borderRadius: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 2,
-  },
-  noticeHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  noticeAuthorContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  noticeAvatar: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    marginRight: 10,
-    backgroundColor: '#F4F6F9',
-  },
-  noticeAuthor: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#1C1C1E',
-  },
-  noticeTime: {
-    color: '#8E8E93',
-    fontSize: 11,
-    marginTop: 2,
-  },
-  noticeBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#C8102E',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 12,
-  },
-  noticeBadgeText: {
-    color: '#FFF',
-    fontSize: 11,
-    fontWeight: 'bold',
-  },
-  noticeContent: {
-    fontSize: 14,
-    color: '#2C2C2E',
-    lineHeight: 20,
-    fontWeight: '500',
-  },
 
-  // ==========================================
-  // MENU XỔ LÊN
-  // ==========================================
-  menuOverlay: {
-    flex: 1,
-    backgroundColor: 'transparent',
-    justifyContent: 'flex-end',
-  },
-  menuContainer: {
-    backgroundColor: '#FFF',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    paddingHorizontal: 16,
-    paddingBottom: 40,
-    paddingTop: 10,
-    position: 'absolute',
-    bottom: 0,
-    width: '100%',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
-    elevation: 20,
-  },
-  dragIndicator: {
-    width: 40,
-    height: 5,
-    backgroundColor: '#CCD0D5',
-    borderRadius: 3,
-    alignSelf: 'center',
-    marginBottom: 15,
-  },
-  menuHeaderTitle: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: '#050505',
-    marginBottom: 20,
-  },
-  menuItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  iconBox: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
-  menuItemText: {
-    fontSize: 17,
-    fontWeight: '600',
-    color: '#050505',
-    flex: 1,
-  },
-  arrowIcon: {
-    marginLeft: 'auto',
-  },
-  notificationBadge: {
-    position: 'absolute',
-    top: -2,
-    right: -2,
-    backgroundColor: '#FF0000',
-    borderRadius: 10,
-    width: 16,
-    height: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#FFF',
-  },
-
-  // -- Nút kết bạn (Thiết kế mới tinh tế, dạng pill viền mỏng) --
-  addFriendBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFF0F2', // Nền đỏ hồng cực nhạt, tone sur tone với BDU_RED
-    borderWidth: 1,
-    borderColor: '#FCD4D4',     // Viền mỏng nhẹ nhàng
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-    marginLeft: 8,
-  },
-  addFriendBtnSent: {
-    backgroundColor: '#F0F2F5', // Nền xám nhạt khi đã gửi
-    borderColor: '#E4E6EB',
-  },
-  addFriendText: {
-    color: BDU_RED,
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  addFriendTextSent: {
-    color: '#65676B', // Chữ xám trung tính khi đã gửi
-  },
-
-  // ==========================================
-  // LAYOUT CHÍNH & HEADER
-  // ==========================================
-  container: { flex: 1, backgroundColor: '#F0F2F5' },
-  
-  // BƠM VÀO: Nền của toàn bộ danh sách cuộn phải là màu XÁM
-  feedWrapper: { 
-    flex: 1, 
-    backgroundColor: '#F0F2F5' 
-  },
-
-  // --- STYLE CHO HEADER FLAT MỚI ---
+  // --- HEADER FLAT ---
   appHeaderFlat: {
-    height: 60,
+    height: 56,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
-    position: 'relative',
     paddingHorizontal: 16,
   },
   headerTitleContainer: {
     flex: 1,
-    alignItems: 'flex-start',
     justifyContent: 'center',
   },
-  logoFlat: {
-    fontSize: 24,
-    fontWeight: '900',
-    color: '#C8102E',
-    letterSpacing: -0.8,
-    textTransform: 'uppercase',
-  },
-  headerSubFlat: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#8A8D91',
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
-    marginTop: 2,
-  },
   actionIconBtn: {
-    width: 40,
-    height: 40,
+    width: 38,
+    height: 38,
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: 'rgba(200, 16, 46, 0.08)',
-    borderRadius: 20,
-  },
-  badgeDot: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: '#C8102E',
-    borderWidth: 2,
-    borderColor: '#FFFFFF',
+    borderRadius: 19,
   },
 
-  // ==========================================
-  // CREATE POST CARD (ĐÃ BƠM CSS MỚI ĐỂ CẮT DÍNH LIỀN)
-  // ==========================================
-  // Wrapper bọc header đăng bài
-  headerWrapper: {
-    backgroundColor: '#F0F2F5',
-  },
+  // --- CREATE POST CARD ---
+  headerWrapper: { backgroundColor: '#F0F2F5' },
   createPostCard: {
-    backgroundColor: '#FFFFFF', // Trắng tinh để nổi bật trên nền xám
-    paddingTop: 16,
-    // Đã xóa borderRadius và margin để phẳng sát màn hình
+    backgroundColor: '#FFFFFF',
+    paddingTop: 14,
   },
   inputSection: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    marginBottom: 16,
+    marginBottom: 12,
   },
   userAvatar: {
-    width: 44, // Avatar to xịn hơn
-    height: 44,
-    borderRadius: 22,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     borderWidth: 1,
-    borderColor: '#E4E6EB', // Viền mờ bao quanh avatar
+    borderColor: '#E4E6EB',
   },
   inputButton: {
     flex: 1,
-    marginLeft: 12,
+    marginLeft: 10,
     backgroundColor: '#F0F2F5',
-    height: 44,
+    height: 42,
     justifyContent: 'center',
-    paddingHorizontal: 18,
-    borderRadius: 22, // Bo góc tròn xoe dạng viên thuốc
+    paddingHorizontal: 16,
+    borderRadius: 21,
   },
   inputText: {
     color: '#65676B',
-    fontSize: 15,
-    fontWeight: '400',
-  },
-  divider: {
-    height: 1,
-    backgroundColor: '#F0F2F5',
-    marginBottom: 12,
+    fontSize: 14.5,
   },
   createActions: {
     flexDirection: 'row',
     borderTopWidth: 1,
-    borderTopColor: '#E4E6EB',
-    paddingVertical: 8,
+    borderTopColor: '#F0F2F5',
+    paddingVertical: 6,
   },
   createActionBtn: {
     flex: 1,
@@ -1707,221 +1557,186 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 8,
-    gap: 8,
+    gap: 6,
   },
   createActionText: {
-    fontSize: 14,
+    fontSize: 13.5,
     fontWeight: '600',
-    color: '#65676B',
+    color: '#4B4C4F',
   },
-  // BƠM VÀO: Kẻ sọc giữa các nút đăng bài
   verticalDivider: {
     width: 1,
-    backgroundColor: '#E4E6EB',
-    marginVertical: 6,
+    backgroundColor: '#F0F2F5',
+    marginVertical: 8,
   },
-
-  // BƠM VÀO: DẢI PHÂN CÁCH DÀY (CỨU TINH CHỐNG RỐI MẮT)
   thickDivider: {
-    height: 10,
+    height: 8,
     backgroundColor: '#F0F2F5',
     width: '100%',
   },
 
-  // ==========================================
-  // POST CARD & MEDIA
-  // ==========================================
-  // BƠM VÀO: THẺ BÀI VIẾT PHẲNG (Dùng class này cho PostItem để hết dính liền)
-  postContainer: { // Tên class này bạn dò đúng tên trong code của bạn nhé
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16, // Độ cong của góc (giữ nguyên theo code cũ của bạn)
-    marginHorizontal: 12,
-    marginBottom: 16,
-    
-    // 🔴 THÊM 2 DÒNG NÀY ĐỂ TẠO VIỀN ĐỎ:
-    borderWidth: 1.5, // Độ dày của viền (có thể chỉnh 1 hoặc 2 tùy mắt thẩm mỹ)
-    borderColor: '#fc0707', // Màu đỏ thương hiệu của bạn (hoặc dùng '#C8102E')
-    
-    // (Tùy chọn) Nếu bạn muốn viền nó mờ mờ tinh tế hơn, không bị chói quá thì dùng dòng này:
-    // borderColor: 'rgba(252, 7, 7, 0.4)', 
-
-    // Các thuộc tính đổ bóng cũ của bạn cứ giữ nguyên ở dưới...
-    elevation: 2,
-    shadowColor: '#ff0000',
-    // ...
-  },
-  
-  // Vẫn giữ lại thẻ cũ phòng hờ nếu bạn đang dùng nó ở đâu đó (Không xóa gì cả)
- // --- BÀI VIẾT ĐANG DÙNG CLASS NÀY ---
+  // --- POST CARD CAO CẤP (BO GÓC MƯỢT MÀ, BÓNG ĐỔ TINH TẾ) ---
+  // --- POST CARD CAO CẤP (BO GÓC MƯỢT MÀ, KHÔNG VIỀN ĐỎ THÔ SƠ) ---
   postCard: {
     backgroundColor: '#FFFFFF',
     marginHorizontal: 12,
-    marginBottom: 16,
-    borderRadius: 16,
-    
-    // 🔴 CHỈNH SỬA TẠI ĐÂY:
-    borderWidth: 1,       // Đổi thành 1.5 cho rõ viền
-    borderColor: '#ff4a4a', // 🔴 ĐỔI TỪ '#ff7113' THÀNH MÀU ĐỎ NÀY!
-
-    // Đổ bóng màu đỏ mờ cho "tone sur tone"
-    shadowColor: '#fffefe', 
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 6,
+    marginBottom: 14,
+    borderRadius: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
     elevation: 3,
+    overflow: 'hidden',
   },
   postHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 16,
-    paddingBottom: 12,
+    padding: 14,
+    paddingBottom: 10,
   },
   postAvatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     borderWidth: 0.5,
     borderColor: '#E4E6EB',
   },
   postInfo: {
     flex: 1,
-    marginLeft: 12,
+    marginLeft: 10,
     justifyContent: 'center',
   },
   authorRow: {
     flexDirection: 'row',
     alignItems: 'center',
     flexWrap: 'wrap',
-    marginBottom: 2,
   },
   postAuthor: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '700',
-    color: '#1C1E21',
-    marginRight: 8,
+    color: '#1A1A1A',
+    marginRight: 6,
   },
   postTime: {
-    fontSize: 13,
+    fontSize: 11.5,
     color: '#8A8D91',
-    fontWeight: '400',
+    marginTop: 1,
   },
-  moreBtn: {
-    padding: 6,
-  },
+  moreBtn: { padding: 4 },
+  
   postContent: {
-    fontSize: 15,
+    fontSize: 14.5,
     color: '#1C1E21',
-    paddingHorizontal: 16,
-    paddingBottom: 12,
-    lineHeight: 22,
+    paddingHorizontal: 14,
+    paddingBottom: 10,
+    lineHeight: 21,
   },
+  mediaWrapper: { width: '100%', backgroundColor: '#000' },
   postImage: {
     width: '100%',
-    height: 300,
-    backgroundColor: '#F0F2F5', 
+    height: 320,
+    backgroundColor: '#F0F2F5',
+  },
+
+  // --- NÚT KẾT BẠN ---
+  addFriendBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFF0F2',
+    borderWidth: 1,
+    borderColor: '#FCD4D4',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+    marginLeft: 6,
+  },
+  addFriendBtnSent: {
+    backgroundColor: '#F0F2F5',
+    borderColor: '#E4E6EB',
+  },
+  addFriendText: {
+    color: BDU_RED,
+    fontSize: 11.5,
+    fontWeight: '700',
+  },
+  addFriendTextSent: {
+    color: '#65676B',
   },
 
   // --- VIDEO ---
-  videoContainer: { width: '100%', borderRadius: 16, overflow: 'hidden', marginBottom: 12, backgroundColor: '#000', elevation: 2, position: 'relative' },
-  postVideo: { width: '100%', height: 250, position: 'relative' },
-  muteBtn: { position: 'absolute', bottom: 15, right: 10, backgroundColor: 'rgba(0,0,0,0.6)', padding: 6, borderRadius: 15 },
-  fullscreenBtn: { position: 'absolute', top: 10, right: 10, backgroundColor: 'rgba(0,0,0,0.6)', padding: 6, borderRadius: 15 },
-  playIconOverlay: { position: 'absolute', top: '50%', left: '50%', transform: [{translateX: -20}, {translateY: -20}], backgroundColor: 'rgba(0,0,0,0.4)', borderRadius: 25, width: 50, height: 50, justifyContent: 'center', alignItems: 'center' },
-  progressBarBg: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 3, backgroundColor: 'rgba(255,255,255,0.3)' },
-  progressBarFill: { height: '100%', backgroundColor: BDU_RED },
+  videoContainer: { width: '100%', backgroundColor: '#000', position: 'relative' },
+  postVideo: { width: '100%', height: 260, position: 'relative' },
+  muteBtn: { position: 'absolute', bottom: 12, right: 12, backgroundColor: 'rgba(0,0,0,0.6)', padding: 6, borderRadius: 14 },
+  fullscreenBtn: { position: 'absolute', top: 12, right: 12, backgroundColor: 'rgba(0,0,0,0.6)', padding: 6, borderRadius: 14 },
+  playIconOverlay: { position: 'absolute', top: '50%', left: '50%', transform: [{translateX: -20}, {translateY: -20}], backgroundColor: 'rgba(0,0,0,0.4)', borderRadius: 25, width: 48, height: 48, justifyContent: 'center', alignItems: 'center' },
 
-  // --- THỐNG KÊ & TƯƠNG TÁC ---
-  postStats: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12 }, 
+ postStats: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 10 }, 
   statsLeft: { flexDirection: 'row', alignItems: 'center' },
-  likeIconBg: { backgroundColor: BDU_RED, width: 22, height: 22, borderRadius: 11, justifyContent: 'center', alignItems: 'center' },
-  statsText: { color: '#65676B', fontSize: 14, marginLeft: 6, fontWeight: '500' },
+  likeIconBg: { backgroundColor: BDU_RED, width: 18, height: 18, borderRadius: 9, justifyContent: 'center', alignItems: 'center' },
+  statsText: { color: '#65676B', fontSize: 13, marginLeft: 5, fontWeight: '500' },
   
   postDivider: {
     height: 1,
-    backgroundColor: '#E4E6EB',
-    marginHorizontal: 16,
+    backgroundColor: '#F0F2F5',
+    marginHorizontal: 14,
   },
-  postActions: { flexDirection: 'row', paddingHorizontal: 16, paddingVertical: 12, gap: 10 },
-  pillBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 10, backgroundColor: '#F4F6F9', borderRadius: 12 },
-  actionText: { color: '#4A4A4A', marginLeft: 6, fontWeight: '600', fontSize: 14 },
+  postActions: { flexDirection: 'row', paddingHorizontal: 14, paddingVertical: 8, gap: 8 },
+  pillBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 8, backgroundColor: '#F8F9FA', borderRadius: 12 },
+  actionText: { color: '#4B4C4F', marginLeft: 6, fontWeight: '600', fontSize: 13.5 },
 
-  // ==========================================
-  // BOTTOM FOOTER CHUẨN ĐỎ - TRẮNG
-  // ==========================================
-  bottomFooterBar: { flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center', backgroundColor: '#FFF', height: 50, borderTopWidth: 1, borderTopColor: '#EAEAEA', paddingBottom: Platform.OS === 'ios' ? 10 : 0 },
-  footerTab: { alignItems: 'center', justifyContent: 'center', flex: 1 },
-  footerTabText: { fontSize: 9.5, color: '#8A8D91', marginTop: 2, fontWeight: '500' },
-  footerBadge: { position: 'absolute', top: -2, right: 25, backgroundColor: BDU_RED, width: 16, height: 16, borderRadius: 8, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#FFF' },
-  footerBadgeText: { color: '#FFF', fontSize: 9, fontWeight: 'bold' },
+  // --- MODALS & COMMENTS ---
+  modalOverlay: { flex: 1, backgroundColor: 'transparent', justifyContent: 'flex-end' },
+  modalContent: { backgroundColor: '#FFF', height: '85%', borderTopLeftRadius: 24, borderTopRightRadius: 24, overflow: 'hidden' },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: BDU_RED, paddingVertical: 14, paddingHorizontal: 16 },
+  modalTitle: { fontSize: 17, fontWeight: '800', color: '#FFF' },
+  postButtonText: { fontSize: 15, fontWeight: 'bold', color: '#FFF' },
+  modalUserInfo: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
+  modalUserName: { fontSize: 15, fontWeight: 'bold', color: '#1A1A1A' },
+  textInput: { fontSize: 16, color: '#1A1A1A', textAlignVertical: 'top', minHeight: 80 },
+  previewImageContainer: { position: 'relative', marginTop: 12, borderRadius: 14, overflow: 'hidden' },
+  previewImage: { width: '100%', height: 240, resizeMode: 'cover' },
+  removeImageBtn: { position: 'absolute', top: 10, right: 10, backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: 14, width: 28, height: 28, justifyContent: 'center', alignItems: 'center' },
+  modalTools: { flexDirection: 'row', gap: 12, borderTopWidth: 1, borderTopColor: '#F0F2F5', paddingVertical: 12, paddingHorizontal: 16, backgroundColor: '#FFF' },
+  toolBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#F8F9FA', paddingVertical: 10, borderRadius: 16, borderWidth: 1, borderColor: '#E4E6EB' },
+  toolBtnText: { marginLeft: 6, fontWeight: '700', color: '#4A4A4A', fontSize: 13.5 },
 
-  // ==========================================
-  // MODAL (TẠO BÀI VIẾT / PREVIEW)
-  // ==========================================
-  modalOverlay: {flex: 1, backgroundColor: 'transparent', justifyContent: 'flex-end', },
-  modalContent: { backgroundColor: '#F4F6F9', height: '85%', borderTopLeftRadius: 24, borderTopRightRadius: 24, overflow: 'hidden' },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: BDU_RED, paddingVertical: 16, paddingHorizontal: 20, borderBottomLeftRadius: 15, borderBottomRightRadius: 15, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 5, elevation: 3 },
-  modalTitle: { fontSize: 18, fontWeight: '800', color: '#FFF' },
-  postButtonText: { fontSize: 16, fontWeight: 'bold', color: '#FFF' },
-  modalUserInfo: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
-  modalUserName: { fontSize: 16, fontWeight: 'bold', color: '#1A1A1A' },
-  textInput: { fontSize: 18, color: '#1A1A1A', textAlignVertical: 'top', minHeight: 80 },
-  previewImageContainer: { position: 'relative', marginTop: 15, borderRadius: 16, overflow: 'hidden', shadowColor: '#000', shadowOffset: {width: 0, height: 4}, shadowOpacity: 0.2, shadowRadius: 5, elevation: 4 },
-  previewImage: { width: '100%', height: 250, resizeMode: 'cover' },
-  removeImageBtn: { position: 'absolute', top: 10, right: 10, backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: 15, width: 30, height: 30, justifyContent: 'center', alignItems: 'center' },
-  modalTools: { flexDirection: 'row', gap: 15, borderTopWidth: 1, borderTopColor: '#E4E6EB', paddingVertical: 15, paddingHorizontal: 16, backgroundColor: '#FFF' },
-  toolBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#F4F6F9', paddingVertical: 12, borderRadius: 20, borderWidth: 1, borderColor: '#E4E6EB' },
-  toolBtnText: { marginLeft: 8, fontWeight: '700', color: '#4A4A4A' },
-
-  // ==========================================
-  // COMMENTS
-  // ==========================================
-  commentModalContainer: {
-    backgroundColor: '#FFF',
-    height: '65%',
-    borderTopLeftRadius: 25,
-    borderTopRightRadius: 25,
-    overflow: 'hidden',
-  },
-  commentHeader: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', backgroundColor: BDU_RED, paddingVertical: 15, position: 'relative', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 3 },
-  closeCommentBtn: { position: 'absolute', right: 15 },
-  commentItem: { flexDirection: 'row', marginBottom: 15 },
-  commentAvatar: { width: 36, height: 36, borderRadius: 18, marginRight: 10, borderWidth: 1, borderColor: '#E4E6EB' },
-  commentBubble: { backgroundColor: '#F0F2F5', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20, flexShrink: 1, alignSelf: 'flex-start' },
-  commentAuthor: { fontWeight: '800', fontSize: 13, color: '#1A1A1A', marginBottom: 2 },
-  commentText: { fontSize: 14, color: '#2C2C2C', lineHeight: 20 },
-  commentActionsWrap: { flexDirection: 'row', alignItems: 'center', marginTop: 4, marginLeft: 10, gap: 10 },
-  commentTimeText: { fontSize: 12, color: '#8A8D91', fontWeight: '500' },
-  commentActionText: { fontSize: 12, color: '#65676B', fontWeight: '700' },
-  emptyCommentText: { textAlign: 'center', color: '#8A8D91', marginTop: 40, fontSize: 15, fontStyle: 'italic' },
-  
-  replyBanner: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#F0F2F5', paddingHorizontal: 16, paddingVertical: 10, borderTopWidth: 1, borderTopColor: '#E4E6EB' },
-  replyBannerText: { fontSize: 13, color: '#65676B', fontWeight: '600' },
-  replyCommentItem: { 
-    marginLeft: 45, 
-    marginTop: 2, 
-    paddingLeft: 10, 
-    borderLeftWidth: 2, 
-    borderLeftColor: '#E4E6EB', 
-  },
-  
-  commentInputWrapper: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 15,
+  commentModalContainer: { backgroundColor: '#FFF', height: '65%', borderTopLeftRadius: 24, borderTopRightRadius: 24, overflow: 'hidden' },
+  commentItem: { flexDirection: 'row', marginBottom: 12 },
+  commentAvatar: { width: 34, height: 34, borderRadius: 17, marginRight: 8, borderWidth: 0.5, borderColor: '#E4E6EB' },
+  commentBubble: { backgroundColor: '#F0F2F5', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 16, flexShrink: 1, alignSelf: 'flex-start' },
+  commentAuthor: { fontWeight: '700', fontSize: 12.5, color: '#1A1A1A', marginBottom: 2 },
+  commentText: { fontSize: 13.5, color: '#2C2C2C', lineHeight: 18 },
+  commentActionsWrap: { flexDirection: 'row', alignItems: 'center', marginTop: 3, marginLeft: 8, gap: 10 },
+  commentTimeText: { fontSize: 11, color: '#8A8D91', fontWeight: '500' },
+  commentActionText: { fontSize: 11, color: '#65676B', fontWeight: '700' },
+  replyBanner: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#F0F2F5', paddingHorizontal: 16, paddingVertical: 8, borderTopWidth: 1, borderTopColor: '#E4E6EB' },
+  replyBannerText: { fontSize: 12.5, color: '#65676B', fontWeight: '600' },
+  replyCommentItem: { marginLeft: 40, marginTop: 2, paddingLeft: 8, borderLeftWidth: 2, borderLeftColor: '#E4E6EB' },
+  commentInputWrapper: { flexDirection: "row", alignItems: "center", paddingHorizontal: 12, paddingVertical: 8, borderTopWidth: 1, borderTopColor: "#F0F2F5", backgroundColor: "#FFF" },
+  commentInput: { flex: 1, backgroundColor: "#F0F2F5", borderRadius: 20, paddingHorizontal: 14, paddingVertical: 8, marginRight: 8, fontSize: 13.5 },
+ scrollTopFloatingBtn: {
+    position: 'absolute',
+    bottom: 24,
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: BDU_RED,
     paddingVertical: 10,
-    borderTopWidth: 1,
-    borderTopColor: "#eee",
-    backgroundColor: "#FFF",
+    paddingHorizontal: 18,
+    borderRadius: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 6,
+    zIndex: 99,
+    gap: 6
   },
-  commentInputAvatar: { width: 36, height: 36, borderRadius: 18, marginRight: 12, marginBottom: 5 },
-  commentInput: {
-    flex: 1,
-    backgroundColor: "#F3F4F6",
-    borderRadius: 25,
-    paddingHorizontal: 15,
-    paddingVertical: 10,
-    marginRight: 10,
-  },
-  sendCommentBtn: { padding: 8, justifyContent: 'center', alignItems: 'center', marginLeft: 5 }
-  
+  scrollTopText: {
+    color: '#FFF',
+    fontSize: 13.5,
+    fontWeight: '700',
+    letterSpacing: 0.3
+  }
 });
