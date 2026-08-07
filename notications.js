@@ -1,23 +1,23 @@
 import React, { useState, useEffect } from 'react';
 import { 
   View, Text, StyleSheet, FlatList, TouchableOpacity, 
-  ActivityIndicator, StatusBar, LayoutAnimation, Platform, UIManager
+  ActivityIndicator, LayoutAnimation, Platform, UIManager, Image
 } from 'react-native';
 import { Ionicons, Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { db } from '../../BDU_SocialApp/firebaseConfig';
-import { collection, query, where, orderBy, onSnapshot, doc, updateDoc } from 'firebase/firestore';
+import { collection, query, where, orderBy, onSnapshot, doc, updateDoc, getDoc, setDoc, deleteDoc } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 
-// Bật LayoutAnimation cho Android để hiệu ứng thu/mở mượt mà
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-const BDU_RED = '#FF3B30';
-const BDU_BG = '#F0F2F5';
+const BDU_RED = '#C8102E'; 
+const BDU_BG = '#F8F9FA'; 
+const DEFAULT_AVATAR = 'https://cdn.pixabay.com/photo/2015/10/05/22/37/blank-profile-picture-973460_960_720.png';
 
 const getTimeAgo = (timestamp) => {
   if (!timestamp) return '';
@@ -39,9 +39,12 @@ const getTimeAgo = (timestamp) => {
 export default function NotificationsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  
   const [notifications, setNotifications] = useState([]);
+  const [friendRequests, setFriendRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isPolicyExpanded, setIsPolicyExpanded] = useState(false);
+  const [processingId, setProcessingId] = useState(null);
 
   useEffect(() => {
     const auth = getAuth();
@@ -55,13 +58,85 @@ export default function NotificationsScreen() {
     );
 
     const unsubNotif = onSnapshot(qNotif, (snapshot) => {
-      const notifs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const notifs = snapshot.docs.map(doc => ({ id: doc.id, _type: 'notification', ...doc.data() }));
       setNotifications(notifs);
-      setLoading(false);
     });
 
-    return () => unsubNotif();
+    const qReq = query(
+      collection(db, "friend_requests"),
+      where("toUserId", "==", currentUser.uid),
+      where("status", "==", "pending")
+    );
+
+    const unsubReq = onSnapshot(qReq, async (snapshot) => {
+      try {
+        const fetchPromises = snapshot.docs.map(async (requestDoc) => {
+          const data = requestDoc.data();
+          const userRef = doc(db, "users", data.fromUserId);
+          const userSnap = await getDoc(userRef);
+          
+          if (userSnap.exists()) {
+            const userData = userSnap.data();
+            return {
+              id: requestDoc.id, 
+              _type: 'friend_request_action',
+              senderId: data.fromUserId,
+              fullName: userData.fullName || userData.name || "Người dùng BDU",
+              avatar: userData.avatar?.trim() ? userData.avatar : DEFAULT_AVATAR,
+              time: data.time || data.createdAt
+            };
+          }
+          return null;
+        });
+
+        const requestsData = (await Promise.all(fetchPromises)).filter(Boolean);
+        requestsData.sort((a, b) => (b.time?.toMillis?.() || 0) - (a.time?.toMillis?.() || 0));
+        setFriendRequests(requestsData);
+      } catch (error) {
+        console.log("Lỗi lấy dữ liệu lời mời:", error);
+      } finally {
+        setLoading(false);
+      }
+    });
+
+    return () => {
+      unsubNotif();
+      unsubReq();
+    };
   }, []);
+
+  const combinedData = [...friendRequests, ...notifications];
+
+  const handleAccept = async (request) => {
+    const currentUserId = getAuth().currentUser?.uid;
+    if (!currentUserId) return;
+
+    setProcessingId(request.id);
+    try {
+      await setDoc(doc(db, "users", currentUserId, "friends", request.senderId), {
+        friendId: request.senderId,
+        addedAt: new Date()
+      });
+      await setDoc(doc(db, "users", request.senderId, "friends", currentUserId), {
+        friendId: currentUserId,
+        addedAt: new Date()
+      });
+      await deleteDoc(doc(db, "friend_requests", request.id));
+    } catch (error) {
+      console.log("Lỗi chấp nhận kết bạn:", error);
+      setProcessingId(null);
+    }
+  };
+
+  const handleReject = async (requestId) => {
+    setProcessingId(requestId);
+    try {
+      await deleteDoc(doc(db, "friend_requests", requestId));
+    } catch (error) {
+      console.log("Lỗi từ chối kết bạn:", error);
+      setProcessingId(null);
+    }
+  };
 
   const handleNotificationPress = async (item) => {
     if (!item.read) {
@@ -71,7 +146,6 @@ export default function NotificationsScreen() {
         console.log("Lỗi đánh dấu đã đọc:", error);
       }
     }
-    if (item.type === 'friend_request') router.push('/friends'); 
   };
 
   const togglePolicy = () => {
@@ -79,7 +153,6 @@ export default function NotificationsScreen() {
     setIsPolicyExpanded(!isPolicyExpanded);
   };
 
-  // THẺ CHÍNH SÁCH GHIM LÊN ĐẦU
   const renderPolicyCard = () => (
     <TouchableOpacity 
       activeOpacity={0.8} 
@@ -94,7 +167,7 @@ export default function NotificationsScreen() {
           <Text style={styles.policyTitle}>Chính sách & Điều khoản</Text>
           <Text style={styles.policySubTitle}>Quan trọng đối với mọi sinh viên BDU</Text>
         </View>
-        <Ionicons name={isPolicyExpanded ? "chevron-up" : "chevron-down"} size={22} color="#8A8D91" />
+        <Ionicons name={isPolicyExpanded ? "chevron-up" : "chevron-down"} size={20} color="#8A8D91" />
       </View>
 
       {isPolicyExpanded && (
@@ -108,62 +181,96 @@ export default function NotificationsScreen() {
     </TouchableOpacity>
   );
 
-  const renderItem = ({ item }) => (
-    <TouchableOpacity 
-      activeOpacity={0.7} 
-      style={[styles.notifCard, { backgroundColor: item.read ? '#FFF' : '#FFF9F9' }]}
-      onPress={() => handleNotificationPress(item)}
-    >
-      <View style={styles.iconWrapper}>
-        <Ionicons 
-          name={item.type === 'friend_request' ? "person-add" : "notifications"} 
-          size={22} 
-          color={BDU_RED} 
-        />
-      </View>
-      <View style={styles.textWrapper}>
-        <Text style={[styles.notifText, { 
-          fontWeight: item.read ? '500' : '700',
-          color: item.read ? '#4A4A4A' : '#1A1A1A'
-        }]}>
-          {item.message || "Bạn có thông báo mới."}
-        </Text>
-        <Text style={[styles.timeText, { color: item.read ? '#8A8D91' : BDU_RED }]}>
-          {getTimeAgo(item.time)}
-        </Text>
-      </View>
-      {!item.read && <View style={styles.unreadDot} />}
-    </TouchableOpacity>
-  );
+  const renderItem = ({ item }) => {
+    if (item._type === 'friend_request_action') {
+      const isProcessing = processingId === item.id;
+      return (
+        <View style={[styles.notifCard, { backgroundColor: '#FFF', borderColor: '#EAEAEA' }]}>
+          <Image source={{ uri: item.avatar }} style={styles.reqAvatar} />
+          <View style={styles.textWrapper}>
+            <Text style={[styles.notifText, { fontWeight: '800', color: '#1A1A1A' }]} numberOfLines={2}>
+              {item.fullName} <Text style={{fontWeight: '500', color: '#4A4A4A'}}>đã gửi cho bạn một lời mời kết bạn.</Text>
+            </Text>
+            <Text style={[styles.timeText, { color: '#8A8D91' }]}>{getTimeAgo(item.time)}</Text>
+            
+            <View style={styles.reqActions}>
+              {isProcessing ? (
+                 <View style={styles.processingWrap}>
+                   <ActivityIndicator size="small" color={BDU_RED} />
+                 </View>
+              ) : (
+                <>
+                  <TouchableOpacity style={styles.acceptBtn} activeOpacity={0.8} onPress={() => handleAccept(item)}>
+                    <Text style={styles.acceptText}>Xác nhận</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.rejectBtn} activeOpacity={0.8} onPress={() => handleReject(item.id)}>
+                    <Text style={styles.rejectText}>Xóa</Text> 
+                  </TouchableOpacity>
+                </>
+              )}
+            </View>
+          </View>
+        </View>
+      );
+    }
+
+    return (
+      <TouchableOpacity 
+        activeOpacity={0.7} 
+        style={[
+          styles.notifCard, 
+          { 
+            backgroundColor: item.read ? '#FFF' : '#FFF5F5',
+            borderColor: item.read ? '#EAEAEA' : '#FAD2D2' 
+          }
+        ]}
+        onPress={() => handleNotificationPress(item)}
+      >
+        <View style={[styles.iconWrapper, { backgroundColor: item.read ? '#F0F2F5' : '#FFF0F2' }]}>
+          <Ionicons 
+            name="notifications" 
+            size={22} 
+            color={item.read ? '#65676B' : BDU_RED} 
+          />
+        </View>
+        <View style={styles.textWrapper}>
+          <Text style={[styles.notifText, { 
+            fontWeight: item.read ? '500' : '800',
+            color: item.read ? '#4A4A4A' : '#1A1A1A'
+          }]}>
+            {item.message || "Bạn có thông báo mới."}
+          </Text>
+          <Text style={[styles.timeText, { color: item.read ? '#8A8D91' : BDU_RED }]}>
+            {getTimeAgo(item.time)}
+          </Text>
+        </View>
+        {!item.read && <View style={styles.unreadDot} />}
+      </TouchableOpacity>
+    );
+  };
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
-      <StatusBar barStyle="dark-content" backgroundColor="#FFF" />
-      
-      {/* HEADER: Đã xóa nút Back, giữ lại tiêu đề màu đỏ căn lề chuẩn trang chủ */}
-      <View style={styles.appHeaderFlat}>
-        <Text style={styles.headerTitle}>Thông báo</Text>
-      </View>
-
+    <View style={styles.container}>
       {loading ? (
-        <View style={styles.centerContainer}>
+        <View style={styles.centerLoading}>
           <ActivityIndicator size="large" color={BDU_RED} />
-          <Text style={styles.loadingText}>Đang tải thông báo...</Text>
+          <Text style={{ marginTop: 12, color: '#65676B', fontWeight: '500', fontSize: 13 }}>Đang tải dữ liệu...</Text>
         </View>
       ) : (
         <FlatList
-          data={notifications}
+          data={combinedData}
           keyExtractor={item => item.id}
           ListHeaderComponent={renderPolicyCard}
           renderItem={renderItem}
-          contentContainerStyle={{ paddingBottom: 20 }}
+          contentContainerStyle={{ paddingBottom: 40 }}
           showsVerticalScrollIndicator={false}
           ListEmptyComponent={
             <View style={styles.emptyState}>
               <View style={styles.emptyIconContainer}>
-                <Feather name="bell-off" size={32} color="#8A8D91" />
+                <Feather name="bell-off" size={32} color={BDU_RED} />
               </View>
               <Text style={styles.emptyTitle}>Chưa có thông báo cá nhân</Text>
+              <Text style={styles.emptyDesc}>Các thông báo tương tác và lời mời kết bạn sẽ hiển thị tại đây.</Text>
             </View>
           }
         />
@@ -173,82 +280,75 @@ export default function NotificationsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#FFF' },
-  
-  appHeaderFlat: { 
-    height: 56, 
-    justifyContent: 'center', 
-    backgroundColor: '#FFF', 
-    paddingHorizontal: 16,
-    borderBottomWidth: 1, 
-    borderBottomColor: '#EAEAEA'
-  },
-  headerTitle: { 
-    fontSize: 20, 
-    fontWeight: '800', 
-    color: BDU_RED, 
-    letterSpacing: -0.5
-  },
-  
-  centerContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingBottom: 100 },
-  loadingText: { fontSize: 13, color: '#65676B', marginTop: 12 },
+  container: { flex: 1, backgroundColor: BDU_BG },
+  centerLoading: { flex: 1, justifyContent: 'center', alignItems: 'center' },
 
-  emptyState: { alignItems: 'center', justifyContent: 'center', paddingHorizontal: 40, marginTop: 60 },
-  emptyIconContainer: { width: 70, height: 70, borderRadius: 35, backgroundColor: '#FFF0F2', justifyContent: 'center', alignItems: 'center', marginBottom: 12 },
-  emptyTitle: { fontSize: 16, fontWeight: '700', color: '#1A1A1A' },
-
-  // --- STYLE CHO THẺ CHÍNH SÁCH ---
   policyCard: {
-    backgroundColor: '#F8F9FA',
+    backgroundColor: '#FFF',
     marginHorizontal: 16,
     marginTop: 16,
     marginBottom: 8,
     borderRadius: 16,
     borderWidth: 1,
     borderColor: '#EAEAEA',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 4,
     overflow: 'hidden'
   },
-  policyHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 14,
+  policyHeader: { flexDirection: 'row', alignItems: 'center', padding: 16 },
+  policyIconBg: { 
+    width: 44, height: 44, borderRadius: 22, backgroundColor: '#1A1A1A', 
+    justifyContent: 'center', alignItems: 'center', marginRight: 14 
   },
-  policyIconBg: {
-    width: 40, height: 40, borderRadius: 12, backgroundColor: '#4A4A4A',
-    justifyContent: 'center', alignItems: 'center', marginRight: 12
+  policyTitle: { fontSize: 16, fontWeight: '800', color: '#1A1A1A', marginBottom: 2 },
+  policySubTitle: { fontSize: 13, color: '#65676B', fontWeight: '500' },
+  policyContent: { 
+    paddingHorizontal: 16, paddingBottom: 16, paddingTop: 12,
+    borderTopWidth: 1, borderTopColor: '#F0F2F5'
   },
-  policyTitle: { fontSize: 14.5, fontWeight: '700', color: '#1A1A1A' },
-  policySubTitle: { fontSize: 12, color: '#65676B', marginTop: 2 },
-  policyContent: {
-    paddingHorizontal: 16,
-    paddingBottom: 16,
-    paddingTop: 4,
-    borderTopWidth: 1,
-    borderTopColor: '#EAEAEA',
-    marginTop: 4,
-  },
-  policyRule: { fontSize: 13, color: '#4A4A4A', lineHeight: 20, marginBottom: 8 },
+  policyRule: { fontSize: 13, color: '#4A4A4A', lineHeight: 20, marginBottom: 8, fontWeight: '500' },
   policyHighlight: { fontWeight: '700', color: '#1A1A1A' },
 
   notifCard: { 
-    paddingHorizontal: 16,
-    paddingVertical: 14, 
-    borderBottomWidth: 1, 
-    borderBottomColor: '#F9F9F9', 
-    flexDirection: 'row', 
-    alignItems: 'center' 
+    flexDirection: 'row',
+    padding: 16,
+    marginHorizontal: 16,
+    marginBottom: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 4,
+    alignItems: 'flex-start'
   },
   iconWrapper: { 
-    width: 48, 
-    height: 48, 
-    borderRadius: 24, 
-    backgroundColor: '#FFF0F2', 
-    justifyContent: 'center', 
-    alignItems: 'center', 
-    marginRight: 14 
+    width: 52, height: 52, borderRadius: 26, 
+    justifyContent: 'center', alignItems: 'center', marginRight: 14 
+  },
+  reqAvatar: { 
+    width: 52, height: 52, borderRadius: 26, 
+    marginRight: 14, backgroundColor: '#E4E6EB',
+    borderWidth: 1, borderColor: '#F0F2F5'
   },
   textWrapper: { flex: 1, justifyContent: 'center' },
-  notifText: { fontSize: 13.5, lineHeight: 18 }, 
-  timeText: { fontSize: 11, marginTop: 4, fontWeight: '500' },
-  unreadDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: BDU_RED, marginLeft: 10 },
+  notifText: { fontSize: 14.5, lineHeight: 22 }, 
+  timeText: { fontSize: 12, marginTop: 4, fontWeight: '600' },
+  unreadDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: BDU_RED, marginLeft: 10, marginTop: 6 },
+
+  reqActions: { flexDirection: 'row', gap: 10, marginTop: 12 },
+  acceptBtn: { flex: 1, backgroundColor: BDU_RED, paddingVertical: 8, borderRadius: 8, alignItems: 'center' },
+  acceptText: { color: '#FFF', fontWeight: '700', fontSize: 13 },
+  rejectBtn: { flex: 1, backgroundColor: '#F0F2F5', paddingVertical: 8, borderRadius: 8, alignItems: 'center' },
+  rejectText: { color: '#1A1A1A', fontWeight: '700', fontSize: 13 },
+  processingWrap: { flex: 1, height: 34, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F0F2F5', borderRadius: 8 },
+
+  emptyState: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 40, marginTop: 40 },
+  emptyIconContainer: { width: 70, height: 70, borderRadius: 35, backgroundColor: '#FFF0F2', justifyContent: 'center', alignItems: 'center', marginBottom: 12 },
+  emptyTitle: { fontSize: 16, fontWeight: '700', color: '#1A1A1A' },
+  emptyDesc: { fontSize: 13, color: '#65676B', textAlign: 'center', marginTop: 4, marginBottom: 16, lineHeight: 20, fontWeight: '500' }
 });
